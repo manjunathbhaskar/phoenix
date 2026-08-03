@@ -35,7 +35,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.dialects.sqlite.base import SQLiteCompiler
+from sqlalchemy.dialects.sqlite.base import SQLiteCompiler, SQLiteDialect
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -202,6 +202,26 @@ class JSONB(JSON):
 def _(*args: Any, **kwargs: Any) -> str:
     # See https://docs.sqlalchemy.org/en/20/core/custom_types.html
     return "JSONB"
+
+
+# The read half of the contract above: `ischema_names` is the registry SQLite
+# reflection consults to turn a declared type back into a Python type. Without
+# an entry, "JSONB" matches nothing and reflection falls back to NUMERIC, the
+# affinity SQLite assigns to any unrecognized type name.
+#
+# That silently rewrites the schema, because Alembic cannot ALTER COLUMN on
+# SQLite and instead rebuilds the table from a reflection of itself. Every
+# batch_alter_table on a table holding a JSON column therefore recreated it
+# with `metadata NUMERIC`, which is how datasets, dataset_versions, experiments
+# and span_annotations came to disagree with the rest of the schema.
+#
+# Behavior is unaffected -- both spellings take NUMERIC affinity, so SQLite
+# coerces numeric-looking scalars either way and its JSON functions accept the
+# result -- but the declared type is what anything reflecting the schema reports,
+# and NUMERIC gives no hint that the column holds JSON. Databases migrated
+# before this registration keep the old spelling; repairing them would mean
+# rebuilding the tables to change a string that changes no behavior.
+SQLiteDialect.ischema_names["JSONB"] = JSONB
 
 
 JSON_ = (

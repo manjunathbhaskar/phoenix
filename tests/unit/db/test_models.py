@@ -8,6 +8,8 @@ import pytest
 import sqlalchemy as sa
 from deepdiff.diff import DeepDiff
 from sqlalchemy import select
+from sqlalchemy.dialects import postgresql as postgresql_dialect
+from sqlalchemy.dialects import sqlite as sqlite_dialect
 from sqlalchemy.orm import selectinload
 
 from phoenix.db import models
@@ -1807,3 +1809,55 @@ class TestExperimentJobPolymorphism:
             assert isinstance(eval_config, models.ExperimentEvalOnlyConfig)
             assert not isinstance(eval_config, models.ExperimentPromptTask)
             assert eval_config.type == "EVAL_ONLY"
+
+
+class TestJSONBReflection:
+    """JSONB must survive a reflect-and-recreate round trip on SQLite.
+
+    ``@compiles(JSONB, "sqlite")`` is only the write half of the contract.
+    Reading a declared type back goes through ``ischema_names``, and a name
+    missing from that registry reflects as NUMERIC -- the affinity SQLite gives
+    any type it does not recognise.
+
+    That is not cosmetic, because Alembic cannot ALTER COLUMN on SQLite and
+    instead rebuilds the table from a reflection of itself. Without the
+    registration, every ``batch_alter_table`` touching a table with a JSON
+    column silently rewrote it to ``NUMERIC``, which is how four tables in the
+    shipped schema came to disagree with the other seven.
+    """
+
+    def test_sqlite_reflects_jsonb_as_jsonb(self) -> None:
+        engine = sa.create_engine("sqlite://")
+        with engine.connect() as conn:
+            conn.exec_driver_sql("CREATE TABLE t (doc JSONB NOT NULL)")
+            conn.commit()
+        metadata = sa.MetaData()
+        metadata.reflect(bind=engine)
+        reflected = metadata.tables["t"].columns["doc"].type
+        assert isinstance(reflected, models.JSONB)
+        # The round trip, which is what a table rebuild actually depends on.
+        assert reflected.compile(sqlite_dialect.dialect()) == "JSONB"
+
+    @pytest.mark.parametrize(
+        "dialect,expected",
+        [
+            (sqlite_dialect.dialect(), "JSONB"),
+            (postgresql_dialect.dialect(), "JSONB"),  # type: ignore[no-untyped-call]
+        ],
+        ids=["sqlite", "postgresql"],
+    )
+    def test_json_columns_compile_to_jsonb_on_both_backends(
+        self, dialect: Any, expected: str
+    ) -> None:
+        """Every allowlisted JSON column renders the same type on both backends."""
+        for table_name, column_name in [
+            ("datasets", "metadata"),
+            ("dataset_versions", "metadata"),
+            ("experiments", "metadata"),
+            ("span_annotations", "metadata"),
+            ("spans", "attributes"),
+            ("experiment_runs", "output"),
+        ]:
+            column = models.Base.metadata.tables[table_name].columns[column_name]
+            actual = column.type.compile(dialect)
+            assert actual == expected, f"{table_name}.{column_name} -> {actual}"
