@@ -768,6 +768,11 @@ class ProjectSession(HasId):
         nullable=False,
         server_default=func.now(),
     )
+    content_complete: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("true"),
+    )
     traces: Mapped[list["Trace"]] = relationship(
         "Trace",
         back_populates="project_session",

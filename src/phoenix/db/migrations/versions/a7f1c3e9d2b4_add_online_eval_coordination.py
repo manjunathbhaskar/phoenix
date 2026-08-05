@@ -161,6 +161,14 @@ def upgrade() -> None:
                 nullable=True,
             )
         )
+        batch_op.add_column(
+            sa.Column(
+                "content_complete",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.text("true"),
+            )
+        )
 
     op.execute(
         sa.text(
@@ -384,9 +392,17 @@ def upgrade() -> None:
         "eval_work_units",
         ["criteria_id"],
     )
+    _create_session_work_units_table()
 
 
 def downgrade() -> None:
+    op.drop_index("ix_eval_session_work_units_criteria_id", table_name="eval_session_work_units")
+    op.drop_index("ix_eval_session_work_units_evaluator_id", table_name="eval_session_work_units")
+    op.drop_index("ix_eval_session_work_units_error_attempts", table_name="eval_session_work_units")
+    op.drop_index("ix_eval_session_work_units_terminal", table_name="eval_session_work_units")
+    op.drop_index("ix_eval_session_work_units_claimable", table_name="eval_session_work_units")
+    op.drop_table("eval_session_work_units")
+
     op.drop_index("ix_eval_work_units_criteria_id", table_name="eval_work_units")
     op.drop_index("ix_eval_work_units_evaluator_id", table_name="eval_work_units")
     op.drop_index("ix_eval_work_units_error_attempts", table_name="eval_work_units")
@@ -404,5 +420,6 @@ def downgrade() -> None:
 
     with op.batch_alter_table("project_sessions") as batch_op:
         batch_op.drop_index("ix_project_sessions_project_id_last_span_seen_at")
+        batch_op.drop_column("content_complete")
         batch_op.drop_column("last_span_seen_at")
     _restore_sqlite_project_session_desc_indexes()

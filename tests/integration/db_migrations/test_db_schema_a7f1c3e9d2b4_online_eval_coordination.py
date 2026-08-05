@@ -307,6 +307,7 @@ class TestEvalSessionWorkUnits(_OnlineEvalSchemaTest):
             ),
         )
 
+
 async def test_project_session_liveness_schema(
     _engine: AsyncEngine,
     _alembic_config: Config,
@@ -363,6 +364,7 @@ async def test_project_session_liveness_schema(
     before = await _run_async(_engine, _get)
     assert before is not None
     assert "last_span_seen_at" not in before["column_names"]
+    assert "content_complete" not in before["column_names"]
     if _db_backend == "sqlite":
         assert (
             await _run_async(_engine, _get_sqlite_project_session_index_sql)
@@ -373,7 +375,10 @@ async def test_project_session_liveness_schema(
     await _up(_engine, _alembic_config, _UP, _schema)
     after = await _run_async(_engine, _get)
     assert after is not None
-    assert after["column_names"] == before["column_names"] | {"last_span_seen_at"}
+    assert after["column_names"] == before["column_names"] | {
+        "last_span_seen_at",
+        "content_complete",
+    }
     assert after["index_names"] == before["index_names"] | {
         "ix_project_sessions_project_id_last_span_seen_at"
     }
