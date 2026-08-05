@@ -1,5 +1,12 @@
 # Changelog
 
+## [19.18.1](https://github.com/Arize-ai/phoenix/compare/arize-phoenix-v19.18.0...arize-phoenix-v19.18.1) (2026-08-05)
+
+
+### Documentation
+
+* update API reference to include chat completions ([#15114](https://github.com/Arize-ai/phoenix/issues/15114)) ([3af38bd](https://github.com/Arize-ai/phoenix/commit/3af38bd088eb2e0055ed12c3ca68fc020aa68ee3))
+
 ## [19.18.0](https://github.com/Arize-ai/phoenix/compare/arize-phoenix-v19.17.0...arize-phoenix-v19.18.0) (2026-08-05)
 
 
